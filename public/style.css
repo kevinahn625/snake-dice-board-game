@@ -1,0 +1,330 @@
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  background: #1a2233;
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ---------------------------------------------------------------------- */
+/* 모달 공통 */
+/* ---------------------------------------------------------------------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+.modal-box {
+  background: #232d42;
+  border-radius: 16px;
+  padding: 28px 24px;
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.modal-title {
+  font-size: 22px;
+  margin: 0 0 20px;
+}
+
+#nameInput,
+#roomCodeInput {
+  width: 100%;
+  padding: 14px;
+  border-radius: 10px;
+  border: none;
+  font-size: 16px;
+  margin-bottom: 12px;
+  background: #f5f6fa;
+  color: #1a2233;
+}
+
+.btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #4f8cff;
+  color: #ffffff;
+}
+
+.btn-secondary {
+  background: #3a4560;
+  color: #ffffff;
+  flex-shrink: 0;
+  width: auto;
+  padding: 14px 18px;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: #8a92a8;
+  font-size: 13px;
+  margin: 18px 0;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px solid #3a4560;
+}
+
+.divider span {
+  padding: 0 10px;
+}
+
+.join-row {
+  display: flex;
+  gap: 8px;
+}
+
+.join-row #roomCodeInput {
+  margin-bottom: 0;
+}
+
+.error-text {
+  color: #ff6b6b;
+  font-size: 13px;
+  min-height: 18px;
+  margin: 14px 0 0;
+}
+
+/* ---------------------------------------------------------------------- */
+/* 대기실 */
+/* ---------------------------------------------------------------------- */
+.screen {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.lobby-box {
+  width: 100%;
+  max-width: 420px;
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.room-code-label {
+  color: #8a92a8;
+  margin: 4px 0;
+  font-size: 13px;
+}
+
+.room-code {
+  font-size: 40px;
+  font-weight: bold;
+  letter-spacing: 6px;
+  color: #4f8cff;
+  margin: 0 0 24px;
+}
+
+.player-list {
+  list-style: none;
+  margin: 0 0 28px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.player-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #232d42;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 15px;
+}
+
+.player-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.host-badge {
+  margin-left: auto;
+  font-size: 12px;
+  color: #ffd54f;
+}
+
+.wait-text {
+  color: #8a92a8;
+  font-size: 14px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* 게임 화면 */
+/* ---------------------------------------------------------------------- */
+#gameScreen {
+  width: 100%;
+  padding: 12px;
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 4px 14px;
+}
+
+.turn-indicator {
+  font-size: 14px;
+  font-weight: bold;
+  background: #232d42;
+  padding: 10px 14px;
+  border-radius: 10px;
+  flex: 1;
+}
+
+.turn-indicator.my-turn {
+  background: #4f8cff;
+}
+
+.dice-area {
+  display: flex;
+  gap: 8px;
+}
+
+.dice {
+  width: 42px;
+  height: 42px;
+  background: #ffffff;
+  color: #1a2233;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.dice.rolling {
+  animation: diceRoll 0.12s linear infinite;
+}
+
+@keyframes diceRoll {
+  0% { transform: rotate(0deg); }
+  50% { transform: rotate(180deg) scale(1.1); }
+  100% { transform: rotate(360deg); }
+}
+
+.board-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.board {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  /* board.png 실제 픽셀 비율(520x758)과 정확히 맞춰야 레터박스 없이
+     좌표 매핑(main.js의 BOARD_POSITIONS)이 그대로 들어맞는다. */
+  aspect-ratio: 520 / 758;
+  background-image: url("board.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  border-radius: 12px;
+}
+
+.token-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.token {
+  position: absolute;
+  width: 8%;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: bold;
+  font-size: 3vw;
+  max-font-size: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: left 0.25s linear, top 0.25s linear;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+}
+
+.bottom-bar {
+  padding: 18px 4px 8px;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+/* ---------------------------------------------------------------------- */
+/* 승리 모달 */
+/* ---------------------------------------------------------------------- */
+.win-title {
+  font-size: 26px;
+  margin: 0 0 10px;
+}
+
+.win-message {
+  font-size: 16px;
+  color: #d0d5e2;
+  margin: 0 0 22px;
+}
+
+@media (min-width: 600px) {
+  .dice {
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+  }
+  .token {
+    font-size: 14px;
+  }
+}

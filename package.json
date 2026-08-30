@@ -1,0 +1,20 @@
+{
+  "name": "snake-dice-board-game",
+  "version": "1.0.0",
+  "description": "모바일 최적화 실시간 멀티룸 뱀 주사위 보드게임 (Node.js + Express + Socket.io)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {
+    "express": "^4.22.2",
+    "socket.io": "^4.8.3"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

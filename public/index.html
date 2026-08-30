@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>뱀 주사위 보드게임</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- 1. 초기 진입 모달: 이름 입력 + 방 생성/입장 -->
+<div id="nameModal" class="modal-overlay">
+  <div class="modal-box">
+    <h1 class="modal-title">🐍 뱀 주사위 보드게임</h1>
+    <input type="text" id="nameInput" maxlength="8" placeholder="이름을 입력하세요" autocomplete="off">
+
+    <button id="createRoomBtn" class="btn btn-primary">새 방 만들기</button>
+
+    <div class="divider"><span>또는</span></div>
+
+    <div class="join-row">
+      <input type="text" id="roomCodeInput" maxlength="4" placeholder="방 코드 4자리" autocomplete="off" inputmode="numeric">
+      <button id="joinRoomBtn" class="btn btn-secondary">참가하기</button>
+    </div>
+
+    <p id="modalError" class="error-text"></p>
+  </div>
+</div>
+
+<!-- 2. 대기실 화면 -->
+<div id="lobbyScreen" class="screen hidden">
+  <div class="lobby-box">
+    <h2>대기실</h2>
+    <p class="room-code-label">방 코드</p>
+    <p id="roomCodeDisplay" class="room-code"></p>
+
+    <ul id="playerList" class="player-list"></ul>
+
+    <button id="startGameBtn" class="btn btn-primary hidden">게임 시작</button>
+    <p id="waitHostText" class="wait-text hidden">방장이 게임을 시작하기를 기다리는 중...</p>
+  </div>
+</div>
+
+<!-- 3. 게임 화면 -->
+<div id="gameScreen" class="screen hidden">
+  <div class="top-bar">
+    <div id="turnIndicator" class="turn-indicator">대기 중...</div>
+    <div class="dice-area">
+      <div id="dice1" class="dice">-</div>
+      <div id="dice2" class="dice">-</div>
+    </div>
+  </div>
+
+  <div id="boardWrap" class="board-wrap">
+    <div id="board" class="board">
+      <div id="tokenLayer" class="token-layer"></div>
+    </div>
+  </div>
+
+  <div class="bottom-bar">
+    <button id="rollDiceBtn" class="btn btn-primary" disabled>주사위 굴리기</button>
+  </div>
+</div>
+
+<!-- 4. 승리 모달 -->
+<div id="winModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h2 id="winTitle" class="win-title">🎉 승리 🎉</h2>
+    <p id="winMessage" class="win-message"></p>
+    <button id="reloadBtn" class="btn btn-primary">다시 하기</button>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

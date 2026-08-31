@@ -254,6 +254,22 @@ html, body {
   100% { transform: rotate(360deg); }
 }
 
+.mute-btn {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 8px;
+  background: #232d42;
+  color: #ffffff;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.mute-btn:active {
+  transform: scale(0.95);
+}
+
 .board-wrap {
   width: 100%;
   display: flex;
@@ -298,6 +314,32 @@ html, body {
   z-index: 5;
 }
 
+/* 뱀꼬리를 만나 아래로 굴러 떨어지는 연출 */
+.token.tumbling {
+  z-index: 6;
+  animation: tumbleDown 0.4s ease-in;
+}
+
+@keyframes tumbleDown {
+  0%   { transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+  25%  { transform: translate(-50%, -50%) rotate(160deg) scale(0.8); }
+  50%  { transform: translate(-50%, -50%) rotate(340deg) scale(1.15); }
+  75%  { transform: translate(-50%, -50%) rotate(520deg) scale(0.85); }
+  100% { transform: translate(-50%, -50%) rotate(720deg) scale(1); }
+}
+
+/* 사다리(파이프)를 타고 위로 오르는 연출 */
+.token.rising {
+  z-index: 6;
+  animation: riseLadder 0.4s ease-out;
+}
+
+@keyframes riseLadder {
+  0%   { transform: translate(-50%, -50%) scale(1); }
+  40%  { transform: translate(-50%, -60%) scale(1.3); }
+  100% { transform: translate(-50%, -50%) scale(1); }
+}
+
 .bottom-bar {
   padding: 18px 4px 8px;
   max-width: 520px;
@@ -316,6 +358,46 @@ html, body {
   font-size: 16px;
   color: #d0d5e2;
   margin: 0 0 22px;
+}
+
+.rank-list {
+  list-style: none;
+  margin: 0 0 22px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.rank-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #2c3752;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.rank-item.self {
+  outline: 2px solid #4f8cff;
+}
+
+.rank-badge {
+  font-weight: bold;
+  color: #ffd54f;
+  flex-shrink: 0;
+  min-width: 34px;
+}
+
+.rank-name {
+  flex: 1;
+}
+
+.rank-pos {
+  color: #8a92a8;
+  font-size: 13px;
 }
 
 @media (min-width: 600px) {

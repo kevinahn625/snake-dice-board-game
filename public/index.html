@@ -49,6 +49,7 @@
       <div id="dice1" class="dice">-</div>
       <div id="dice2" class="dice">-</div>
     </div>
+    <button id="muteBtn" class="mute-btn" title="소리 켜기/끄기">🔊</button>
   </div>
 
   <div id="boardWrap" class="board-wrap">
@@ -67,9 +68,12 @@
   <div class="modal-box">
     <h2 id="winTitle" class="win-title">🎉 승리 🎉</h2>
     <p id="winMessage" class="win-message"></p>
+    <ol id="rankList" class="rank-list"></ol>
     <button id="reloadBtn" class="btn btn-primary">다시 하기</button>
   </div>
 </div>
+
+<audio id="bgmAudio" src="mondamusic-retro-arcade-game-music-512837.mp3" loop preload="auto"></audio>
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="main.js"></script>

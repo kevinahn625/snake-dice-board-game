@@ -21,7 +21,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ---------------------------------------------------------------------------
 const MAX_ROOMS = 10;          // 동시 개설 가능 최대 방 수
 const MAX_PLAYERS_PER_ROOM = 4; // 방 당 최대 인원
-const MIN_PLAYERS_TO_START = 2; // 게임 시작 최소 인원
 const TICK_MS = 250;            // 한 칸 전진 간격 (클라이언트와 동일하게 유지)
 const DICE_ANIM_MS = 700;       // 주사위 굴리는 연출 시간
 const SLIDE_MS = 400;           // 뱀/파이프 슬라이드 연출 시간
@@ -117,27 +116,16 @@ function findRoomBySocket(socket) {
   return rooms[roomId] || null;
 }
 
-// 주사위 합만큼 이동 경로(오버 규칙 포함)를 계산한다.
+// 주사위 합만큼 이동 경로를 계산한다. 100칸을 넘어가는 초과분은 버리고
+// 100칸에서 멈춘다(정확히 맞추지 않아도 100 이상이면 결승 도착으로 처리).
 function calculatePath(start, sum) {
   const path = [];
   let pos = start;
-  const target = start + sum;
+  const target = Math.min(start + sum, 100);
 
-  if (target <= 100) {
-    for (let i = 0; i < sum; i++) {
-      pos++;
-      path.push(pos);
-    }
-  } else {
-    while (pos < 100) {
-      pos++;
-      path.push(pos);
-    }
-    const excess = target - 100;
-    for (let i = 0; i < excess; i++) {
-      pos--;
-      path.push(pos);
-    }
+  while (pos < target) {
+    pos++;
+    path.push(pos);
   }
   return path;
 }
@@ -244,11 +232,6 @@ io.on('connection', (socket) => {
     const player = room.players.find((p) => p.id === socket.id);
     if (!player || !player.isHost) return;
 
-    if (room.players.length < MIN_PLAYERS_TO_START) {
-      socket.emit('errorMsg', `최소 ${MIN_PLAYERS_TO_START}명 이상이어야 시작할 수 있습니다.`);
-      return;
-    }
-
     room.started = true;
     room.currentTurnIndex = 0;
     io.to(room.id).emit('gameStarted', publicRoomState(room));
@@ -274,14 +257,18 @@ io.on('connection', (socket) => {
 
     const path = calculatePath(currentPlayer.position, sum);
     const landedAt = path[path.length - 1];
+    const isLadder = !!LADDERS[landedAt];
+    const isSnake = !!SNAKES[landedAt];
     const slideTo = LADDERS[landedAt] || SNAKES[landedAt] || null;
+    const slideType = isLadder ? 'ladder' : (isSnake ? 'snake' : null);
 
     setTimeout(() => {
       if (!rooms[room.id]) return; // 방이 이미 사라진 경우
       io.to(room.id).emit('movePath', {
         playerId: currentPlayer.id,
         path,
-        slideTo
+        slideTo,
+        slideType
       });
 
       const totalMoveMs = path.length * TICK_MS + (slideTo ? SLIDE_MS : 0);
@@ -294,11 +281,22 @@ io.on('connection', (socket) => {
 
         livePlayer.position = slideTo || landedAt;
 
-        if (livePlayer.position === 100) {
+        if (livePlayer.position >= 100) {
+          const rankings = [...liveRoom.players]
+            .sort((a, b) => b.position - a.position)
+            .map((p, idx) => ({
+              id: p.id,
+              nick: p.nick,
+              name: p.name,
+              position: p.position,
+              rank: idx + 1
+            }));
+
           io.to(liveRoom.id).emit('gameOver', {
             winnerId: livePlayer.id,
             winnerNick: livePlayer.nick,
-            winnerName: livePlayer.name
+            winnerName: livePlayer.name,
+            rankings
           });
           liveRoom.started = false;
           broadcastRoomUpdate(liveRoom);

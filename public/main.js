@@ -50,6 +50,142 @@
   let isAnimating = false;
 
   // -------------------------------------------------------------------
+  // 사운드 엔진 (Web Audio API로 배경음악/효과음을 직접 합성해 재생)
+  // 별도 오디오 파일 없이 동작하도록 오실레이터로 소리를 만든다.
+  // -------------------------------------------------------------------
+  const Sound = (function () {
+    let ctx = null;
+    let muted = false;
+    let bgmTimer = null;
+    let bgmStep = 0;
+
+    // 배경음악은 public/bgm.mp3 파일을 그대로 재생한다.
+    // (파일이 없으면 자동으로 합성 멜로디로 대체된다.)
+    const bgmAudio = document.getElementById('bgmAudio');
+    bgmAudio.volume = 0.35;
+    let bgmFileFailed = false;
+    bgmAudio.addEventListener('error', () => { bgmFileFailed = true; });
+
+    // 밝고 경쾌한 8마디 반복 멜로디 (도-미-솔 위주의 장조 진행) - bgm.mp3가 없을 때의 대체용
+    const MELODY = [523.25, 659.25, 783.99, 659.25, 523.25, 659.25, 987.77, 783.99];
+    const BASS = [130.81, 0, 164.81, 0, 130.81, 0, 196.00, 0];
+    const STEP_MS = 260;
+
+    function ensureCtx() {
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        ctx = new AC();
+      }
+      if (ctx.state === 'suspended') ctx.resume();
+      return ctx;
+    }
+
+    // 브라우저 자동재생 정책 때문에 사용자의 첫 클릭 안에서 한 번
+    // 재생을 시도해둬야 이후 startBgm()의 play()가 막히지 않는다.
+    function unlockBgmAudio() {
+      const p = bgmAudio.play();
+      if (p && p.catch) {
+        p.then(() => bgmAudio.pause()).catch(() => {});
+      }
+    }
+
+    function tone(freq, startDelay, duration, opts) {
+      if (muted || !freq) return;
+      const c = ensureCtx();
+      const o = c.createOscillator();
+      const g = c.createGain();
+      o.type = (opts && opts.type) || 'triangle';
+      o.frequency.setValueAtTime(freq, c.currentTime + startDelay);
+      if (opts && opts.slideTo) {
+        o.frequency.exponentialRampToValueAtTime(
+          Math.max(opts.slideTo, 1),
+          c.currentTime + startDelay + duration
+        );
+      }
+      const peak = (opts && opts.gain) || 0.12;
+      g.gain.setValueAtTime(0.0001, c.currentTime + startDelay);
+      g.gain.exponentialRampToValueAtTime(peak, c.currentTime + startDelay + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + startDelay + duration);
+      o.connect(g).connect(c.destination);
+      o.start(c.currentTime + startDelay);
+      o.stop(c.currentTime + startDelay + duration + 0.02);
+    }
+
+    function playLadder() {
+      // 위로 올라가는 경쾌한 상승 아르페지오
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+        tone(f, i * 0.07, 0.16, { type: 'triangle', gain: 0.14 });
+      });
+    }
+
+    function playSnake() {
+      // 아래로 굴러 떨어지는 하강 글리산도 + 바닥에 닿는 둔탁한 소리
+      tone(700, 0, 0.4, { type: 'sawtooth', gain: 0.1, slideTo: 120 });
+      tone(90, 0.38, 0.15, { type: 'sine', gain: 0.18 });
+    }
+
+    function bgmTick() {
+      if (muted) return;
+      const i = bgmStep % MELODY.length;
+      tone(MELODY[i], 0, STEP_MS / 1000 * 0.9, { type: 'square', gain: 0.05 });
+      if (BASS[i]) tone(BASS[i], 0, STEP_MS / 1000 * 0.9, { type: 'sine', gain: 0.06 });
+      bgmStep++;
+    }
+
+    function startSynthBgm() {
+      if (bgmTimer) return;
+      ensureCtx();
+      bgmStep = 0;
+      bgmTick();
+      bgmTimer = setInterval(bgmTick, STEP_MS);
+    }
+
+    function stopSynthBgm() {
+      if (bgmTimer) {
+        clearInterval(bgmTimer);
+        bgmTimer = null;
+      }
+    }
+
+    function startBgm() {
+      if (muted) return;
+      if (bgmFileFailed) {
+        startSynthBgm();
+        return;
+      }
+      const p = bgmAudio.play();
+      if (p && p.catch) {
+        p.catch(() => {
+          // mp3 재생이 막혔거나 파일이 없으면 합성 멜로디로 대체
+          startSynthBgm();
+        });
+      }
+    }
+
+    function stopBgm() {
+      bgmAudio.pause();
+      bgmAudio.currentTime = 0;
+      stopSynthBgm();
+    }
+
+    function setMuted(v) {
+      muted = v;
+      bgmAudio.muted = v;
+      if (muted) stopSynthBgm();
+    }
+
+    return {
+      unlock: () => { ensureCtx(); unlockBgmAudio(); },
+      playLadder,
+      playSnake,
+      startBgm,
+      stopBgm,
+      setMuted,
+      isMuted: () => muted
+    };
+  })();
+
+  // -------------------------------------------------------------------
   // DOM 참조
   // -------------------------------------------------------------------
   const nameModal = document.getElementById('nameModal');
@@ -75,7 +211,10 @@
   const winModal = document.getElementById('winModal');
   const winTitle = document.getElementById('winTitle');
   const winMessage = document.getElementById('winMessage');
+  const rankList = document.getElementById('rankList');
   const reloadBtn = document.getElementById('reloadBtn');
+
+  const muteBtn = document.getElementById('muteBtn');
 
   // -------------------------------------------------------------------
   // 화면 전환 헬퍼
@@ -128,6 +267,7 @@
       switchToGame();
       renderBoardTokens();
       renderTurn();
+      Sound.startBgm();
     });
 
     socket.on('diceResult', (data) => {
@@ -135,7 +275,7 @@
     });
 
     socket.on('movePath', (data) => {
-      animateMove(data.playerId, data.path, data.slideTo);
+      animateMove(data.playerId, data.path, data.slideTo, data.slideType);
     });
 
     socket.on('turnChanged', (state) => {
@@ -144,6 +284,7 @@
     });
 
     socket.on('gameOver', (data) => {
+      Sound.stopBgm();
       showWinModal(data);
     });
   }
@@ -152,6 +293,7 @@
   // 초기 모달 이벤트
   // -------------------------------------------------------------------
   createRoomBtn.addEventListener('click', () => {
+    Sound.unlock();
     const name = nameInput.value.trim();
     if (!name) {
       showError('이름을 입력해주세요.');
@@ -163,6 +305,7 @@
   });
 
   joinRoomBtn.addEventListener('click', () => {
+    Sound.unlock();
     const name = nameInput.value.trim();
     const roomId = roomCodeInput.value.trim();
     if (!name) {
@@ -176,6 +319,15 @@
     showError('');
     ensureSocket();
     socket.emit('joinRoom', { name, roomId });
+  });
+
+  muteBtn.addEventListener('click', () => {
+    const nextMuted = !Sound.isMuted();
+    Sound.setMuted(nextMuted);
+    muteBtn.textContent = nextMuted ? '🔇' : '🔊';
+    if (!nextMuted && currentRoom && currentRoom.started) {
+      Sound.startBgm();
+    }
   });
 
   startGameBtn.addEventListener('click', () => {
@@ -223,6 +375,10 @@
 
     const self = currentRoom.players.find((p) => p.id === selfId);
     const amHost = !!(self && self.isHost);
+
+    startGameBtn.textContent = currentRoom.players.length >= 2
+      ? '게임 시작 (같이하기)'
+      : '게임 시작 (혼자하기)';
 
     startGameBtn.classList.toggle('hidden', !amHost);
     waitHostText.classList.toggle('hidden', amHost);
@@ -346,7 +502,7 @@
   // -------------------------------------------------------------------
   // 말 이동 애니메이션 (0.25초 간격 한 칸씩 + 뱀/파이프 슬라이드)
   // -------------------------------------------------------------------
-  function animateMove(playerId, path, slideTo) {
+  function animateMove(playerId, path, slideTo, slideType) {
     const player = getPlayerById(playerId);
     const el = document.getElementById('token-' + playerId);
     if (!player || !el) return;
@@ -367,11 +523,20 @@
 
         if (slideTo) {
           setTimeout(() => {
+            const animClass = slideType === 'snake' ? 'tumbling' : 'rising';
+            if (slideType === 'snake') {
+              Sound.playSnake();
+            } else {
+              Sound.playLadder();
+            }
+            el.classList.add(animClass);
+
             player.position = slideTo;
             positionToken(el, slideTo, playerId);
             resolveOverlapsFor(slideTo);
 
             setTimeout(() => {
+              el.classList.remove(animClass);
               isAnimating = false;
               renderTurn();
             }, SLIDE_MS);
@@ -400,7 +565,31 @@
   function showWinModal(data) {
     const isMe = data.winnerId === selfId;
     winTitle.textContent = isMe ? '🎉 승리했습니다! 🎉' : '🎉 게임 종료 🎉';
-    winMessage.textContent = `${data.winnerName}(${data.winnerNick})님이 100번 칸에 도착했습니다!`;
+    winMessage.textContent = `${data.winnerName}(${data.winnerNick})님이 결승선에 도착했습니다!`;
+
+    rankList.innerHTML = '';
+    (data.rankings || []).forEach((r) => {
+      const li = document.createElement('li');
+      li.className = 'rank-item' + (r.id === selfId ? ' self' : '');
+
+      const badge = document.createElement('span');
+      badge.className = 'rank-badge';
+      badge.textContent = `${r.rank}위`;
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'rank-name';
+      nameSpan.textContent = `${r.name}(${r.nick})`;
+
+      const posSpan = document.createElement('span');
+      posSpan.className = 'rank-pos';
+      posSpan.textContent = `${r.position}칸`;
+
+      li.appendChild(badge);
+      li.appendChild(nameSpan);
+      li.appendChild(posSpan);
+      rankList.appendChild(li);
+    });
+
     winModal.classList.remove('hidden');
   }
 

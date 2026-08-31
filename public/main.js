@@ -40,6 +40,7 @@
   const TICK_MS = 250;
   const SLIDE_MS = 400;
   const DICE_ANIM_MS = 700;
+  const SINGLE_DIE_THRESHOLD = 90; // 90칸 이상이면 주사위 1개만 사용 (서버와 동일하게 유지)
 
   // -------------------------------------------------------------------
   // 상태
@@ -271,7 +272,7 @@
     });
 
     socket.on('diceResult', (data) => {
-      playDiceAnimation(data.d1, data.d2);
+      playDiceAnimation(data.d1, data.d2, data.singleDie);
     });
 
     socket.on('movePath', (data) => {
@@ -464,6 +465,8 @@
 
     const isMyTurn = current.id === selfId;
 
+    dice2El.classList.toggle('hidden', current.position >= SINGLE_DIE_THRESHOLD);
+
     if (isMyTurn) {
       turnIndicator.textContent = '당신의 차례입니다! 주사위를 굴려주세요';
       turnIndicator.classList.add('my-turn');
@@ -478,16 +481,18 @@
   // -------------------------------------------------------------------
   // 주사위 애니메이션
   // -------------------------------------------------------------------
-  function playDiceAnimation(finalD1, finalD2) {
+  function playDiceAnimation(finalD1, finalD2, singleDie) {
     isAnimating = true;
     rollDiceBtn.disabled = true;
 
+    dice2El.classList.toggle('hidden', !!singleDie);
+
     dice1El.classList.add('rolling');
-    dice2El.classList.add('rolling');
+    if (!singleDie) dice2El.classList.add('rolling');
 
     const spinTimer = setInterval(() => {
       dice1El.textContent = String(1 + Math.floor(Math.random() * 6));
-      dice2El.textContent = String(1 + Math.floor(Math.random() * 6));
+      if (!singleDie) dice2El.textContent = String(1 + Math.floor(Math.random() * 6));
     }, 80);
 
     setTimeout(() => {
@@ -495,7 +500,7 @@
       dice1El.classList.remove('rolling');
       dice2El.classList.remove('rolling');
       dice1El.textContent = String(finalD1);
-      dice2El.textContent = String(finalD2);
+      if (!singleDie) dice2El.textContent = String(finalD2);
     }, DICE_ANIM_MS);
   }
 
@@ -565,7 +570,7 @@
   function showWinModal(data) {
     const isMe = data.winnerId === selfId;
     winTitle.textContent = isMe ? '🎉 승리했습니다! 🎉' : '🎉 게임 종료 🎉';
-    winMessage.textContent = `${data.winnerName}(${data.winnerNick})님이 결승선에 도착했습니다!`;
+    winMessage.textContent = '결승선에 도착했습니다! 최종 순위는 다음과 같습니다.';
 
     rankList.innerHTML = '';
     (data.rankings || []).forEach((r) => {
@@ -578,7 +583,7 @@
 
       const nameSpan = document.createElement('span');
       nameSpan.className = 'rank-name';
-      nameSpan.textContent = `${r.name}(${r.nick})`;
+      nameSpan.textContent = r.name;
 
       const posSpan = document.createElement('span');
       posSpan.className = 'rank-pos';

@@ -116,16 +116,31 @@ function findRoomBySocket(socket) {
   return rooms[roomId] || null;
 }
 
-// 주사위 합만큼 이동 경로를 계산한다. 100칸을 넘어가는 초과분은 버리고
-// 100칸에서 멈춘다(정확히 맞추지 않아도 100 이상이면 결승 도착으로 처리).
+// 90칸이 넘으면(90 이상) 주사위 1개(1~6)만, 그 아래는 주사위 2개(합 2~12)를 사용한다.
+const SINGLE_DIE_THRESHOLD = 90;
+
+// 주사위 합만큼 이동 경로를 계산한다. 100칸을 넘기면 100까지 간 뒤
+// 초과분만큼 다시 뒤로 되돌아온다(정확히 100에 도착해야 결승 처리).
 function calculatePath(start, sum) {
   const path = [];
   let pos = start;
-  const target = Math.min(start + sum, 100);
+  const target = start + sum;
 
-  while (pos < target) {
-    pos++;
-    path.push(pos);
+  if (target <= 100) {
+    for (let i = 0; i < sum; i++) {
+      pos++;
+      path.push(pos);
+    }
+  } else {
+    while (pos < 100) {
+      pos++;
+      path.push(pos);
+    }
+    const excess = target - 100;
+    for (let i = 0; i < excess; i++) {
+      pos--;
+      path.push(pos);
+    }
   }
   return path;
 }
@@ -244,15 +259,17 @@ io.on('connection', (socket) => {
     const currentPlayer = room.players[room.currentTurnIndex];
     if (!currentPlayer || currentPlayer.id !== socket.id) return;
 
+    const singleDie = currentPlayer.position >= SINGLE_DIE_THRESHOLD;
     const d1 = 1 + Math.floor(Math.random() * 6);
-    const d2 = 1 + Math.floor(Math.random() * 6);
-    const sum = d1 + d2;
+    const d2 = singleDie ? null : 1 + Math.floor(Math.random() * 6);
+    const sum = singleDie ? d1 : d1 + d2;
 
     io.to(room.id).emit('diceResult', {
       playerId: currentPlayer.id,
       d1,
       d2,
-      sum
+      sum,
+      singleDie
     });
 
     const path = calculatePath(currentPlayer.position, sum);
@@ -281,7 +298,7 @@ io.on('connection', (socket) => {
 
         livePlayer.position = slideTo || landedAt;
 
-        if (livePlayer.position >= 100) {
+        if (livePlayer.position === 100) {
           const rankings = [...liveRoom.players]
             .sort((a, b) => b.position - a.position)
             .map((p, idx) => ({

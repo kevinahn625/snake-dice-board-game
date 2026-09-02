@@ -468,10 +468,10 @@
     dice2El.classList.toggle('hidden', current.position >= SINGLE_DIE_THRESHOLD);
 
     if (isMyTurn) {
-      turnIndicator.textContent = '당신의 차례입니다! 주사위를 터치해 굴려주세요 👉';
+      turnIndicator.textContent = '내 차례! 주사위를 터치하세요 👉';
       turnIndicator.classList.add('my-turn');
     } else {
-      turnIndicator.textContent = `${current.name}님의 차례 (상대방 턴 대기 중)`;
+      turnIndicator.textContent = `${current.name}님 차례예요`;
       turnIndicator.classList.remove('my-turn');
     }
 

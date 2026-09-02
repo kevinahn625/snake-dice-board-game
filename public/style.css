@@ -285,6 +285,12 @@ body {
   padding: 10px 14px;
   border-radius: 10px;
   flex: 1;
+  min-height: calc(14px * 1.35 * 2);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.35;
 }
 
 .turn-indicator.my-turn {

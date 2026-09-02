@@ -481,6 +481,32 @@
   // -------------------------------------------------------------------
   // 주사위 애니메이션
   // -------------------------------------------------------------------
+  // 눈금(핍) 배치: 3x3 그리드에서 켜질 칸의 인덱스 (0~8, 왼쪽 위부터 행 우선)
+  const DICE_PIP_PATTERNS = {
+    1: [4],
+    2: [0, 8],
+    3: [0, 4, 8],
+    4: [0, 2, 6, 8],
+    5: [0, 2, 4, 6, 8],
+    6: [0, 2, 3, 5, 6, 8],
+  };
+
+  function setDiceFace(el, value) {
+    const pattern = DICE_PIP_PATTERNS[value];
+    if (!pattern) {
+      el.classList.remove('pips');
+      el.textContent = '-';
+      return;
+    }
+    el.classList.add('pips');
+    el.innerHTML = '';
+    for (let i = 0; i < 9; i++) {
+      const pip = document.createElement('span');
+      pip.className = 'pip' + (pattern.includes(i) ? ' on' : '');
+      el.appendChild(pip);
+    }
+  }
+
   function playDiceAnimation(finalD1, finalD2, singleDie) {
     isAnimating = true;
     rollDiceBtn.disabled = true;
@@ -491,16 +517,16 @@
     if (!singleDie) dice2El.classList.add('rolling');
 
     const spinTimer = setInterval(() => {
-      dice1El.textContent = String(1 + Math.floor(Math.random() * 6));
-      if (!singleDie) dice2El.textContent = String(1 + Math.floor(Math.random() * 6));
+      setDiceFace(dice1El, 1 + Math.floor(Math.random() * 6));
+      if (!singleDie) setDiceFace(dice2El, 1 + Math.floor(Math.random() * 6));
     }, 80);
 
     setTimeout(() => {
       clearInterval(spinTimer);
       dice1El.classList.remove('rolling');
       dice2El.classList.remove('rolling');
-      dice1El.textContent = String(finalD1);
-      if (!singleDie) dice2El.textContent = String(finalD2);
+      setDiceFace(dice1El, finalD1);
+      if (!singleDie) setDiceFace(dice2El, finalD2);
     }, DICE_ANIM_MS);
   }
 

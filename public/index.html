@@ -8,23 +8,17 @@
 </head>
 <body>
 
-<!-- 1. 초기 진입 모달: 이름 입력 + 방 생성/입장 -->
+<!-- 1. 초기 진입 모달: 이름 입력 + 방 생성/입장 (start.png 아트워크를 그대로 카드로 사용) -->
 <div id="nameModal" class="modal-overlay">
-  <div class="modal-box">
-    <h1 class="modal-title">🐍 뱀 주사위 보드게임</h1>
-    <input type="text" id="nameInput" maxlength="8" placeholder="이름을 입력하세요" autocomplete="off">
-
-    <button id="createRoomBtn" class="btn btn-primary">새 방 만들기</button>
-
-    <div class="divider"><span>또는</span></div>
-
-    <div class="join-row">
-      <input type="text" id="roomCodeInput" maxlength="4" placeholder="방 코드 4자리" autocomplete="off" inputmode="numeric">
-      <button id="joinRoomBtn" class="btn btn-secondary">참가하기</button>
-    </div>
-
-    <p id="modalError" class="error-text"></p>
+  <div class="entry-card">
+    <input type="text" id="nameInput" maxlength="8" placeholder="이름을 입력하세요" autocomplete="off"
+           class="art-field name-field">
+    <button id="createRoomBtn" class="art-field create-field">새 방 만들기</button>
+    <input type="text" id="roomCodeInput" maxlength="4" placeholder="방코드 4자리 입력" autocomplete="off" inputmode="numeric"
+           class="art-field roomcode-field">
+    <button id="joinRoomBtn" class="art-field join-field">참가하기</button>
   </div>
+  <p id="modalError" class="error-text"></p>
 </div>
 
 <!-- 2. 대기실 화면 -->

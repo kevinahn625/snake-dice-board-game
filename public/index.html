@@ -39,10 +39,10 @@
 <div id="gameScreen" class="screen hidden">
   <div class="top-bar">
     <div id="turnIndicator" class="turn-indicator">대기 중...</div>
-    <div class="dice-area">
+    <button id="diceArea" type="button" class="dice-area" disabled title="주사위를 터치해 굴리세요">
       <div id="dice1" class="dice">-</div>
       <div id="dice2" class="dice">-</div>
-    </div>
+    </button>
     <button id="muteBtn" class="mute-btn" title="소리 켜기/끄기">🔊</button>
   </div>
 
@@ -50,10 +50,6 @@
     <div id="board" class="board">
       <div id="tokenLayer" class="token-layer"></div>
     </div>
-  </div>
-
-  <div class="bottom-bar">
-    <button id="rollDiceBtn" class="btn btn-primary" disabled>주사위 굴리기</button>
   </div>
 </div>
 

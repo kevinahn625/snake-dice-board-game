@@ -294,6 +294,31 @@ body {
 .dice-area {
   display: flex;
   gap: 8px;
+  border: none;
+  background: transparent;
+  padding: 4px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.dice-area:not(:disabled) {
+  box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.5);
+  animation: diceAreaPulse 1.4s ease-in-out infinite;
+}
+
+.dice-area:not(:disabled):active {
+  transform: scale(0.95);
+}
+
+.dice-area:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@keyframes diceAreaPulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.5); }
+  50% { box-shadow: 0 0 0 5px rgba(79, 140, 255, 0.25); }
 }
 
 .dice {
@@ -380,17 +405,18 @@ body {
   min-height: 0;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   overflow: hidden;
 }
 
 .board {
   position: relative;
-  /* 상단바(약 78px) + 하단바(약 71px) + 화면 상하 패딩(24px)을 제외한
-     나머지 세로 공간에 맞춰, 폭이 넘치지 않는 선에서 520:758 비율 그대로 축소한다.
-     (아래 height:auto + aspect-ratio 조합만으로는 일부 브라우저에서 세로만
-     눌려 찌그러지는 문제가 있어 min()으로 폭을 직접 계산한다) */
-  width: min(100%, 520px, calc((100dvh - 175px) * 0.68602));
+  /* 하단 버튼바가 없어졌으므로 상단바(약 78px) + 화면 상하 패딩(24px)만
+     제외한 나머지 세로 공간에 맞춰, 폭이 넘치지 않는 선에서 520:758 비율
+     그대로 확대/축소한다. (아래 height:auto + aspect-ratio 조합만으로는
+     일부 브라우저에서 세로만 눌려 찌그러지는 문제가 있어 min()으로 폭을
+     직접 계산한다) */
+  width: min(100%, 520px, calc((100dvh - 105px) * 0.68602));
   height: auto;
   /* board.png 실제 픽셀 비율(520x758)과 정확히 맞춰야 레터박스 없이
      좌표 매핑(main.js의 BOARD_POSITIONS)이 그대로 들어맞는다. */
@@ -472,14 +498,6 @@ body {
   100% {
     transform: translate(-50%, -50%) scale(1);
   }
-}
-
-.bottom-bar {
-  padding: 12px 4px 8px;
-  max-width: 520px;
-  width: 100%;
-  margin: 0 auto;
-  flex-shrink: 0;
 }
 
 /* ---------------------------------------------------------------------- */

@@ -207,7 +207,7 @@
   const dice1El = document.getElementById('dice1');
   const dice2El = document.getElementById('dice2');
   const tokenLayer = document.getElementById('tokenLayer');
-  const rollDiceBtn = document.getElementById('rollDiceBtn');
+  const diceArea = document.getElementById('diceArea');
 
   const winModal = document.getElementById('winModal');
   const winTitle = document.getElementById('winTitle');
@@ -339,7 +339,7 @@
     window.location.reload();
   });
 
-  rollDiceBtn.addEventListener('click', () => {
+  diceArea.addEventListener('click', () => {
     if (isAnimating) return;
     socket.emit('rollDice');
   });
@@ -468,14 +468,14 @@
     dice2El.classList.toggle('hidden', current.position >= SINGLE_DIE_THRESHOLD);
 
     if (isMyTurn) {
-      turnIndicator.textContent = '당신의 차례입니다! 주사위를 굴려주세요';
+      turnIndicator.textContent = '당신의 차례입니다! 주사위를 터치해 굴려주세요 👉';
       turnIndicator.classList.add('my-turn');
     } else {
       turnIndicator.textContent = `${current.name}님의 차례 (상대방 턴 대기 중)`;
       turnIndicator.classList.remove('my-turn');
     }
 
-    rollDiceBtn.disabled = !isMyTurn || isAnimating;
+    diceArea.disabled = !isMyTurn || isAnimating;
   }
 
   // -------------------------------------------------------------------
@@ -509,7 +509,7 @@
 
   function playDiceAnimation(finalD1, finalD2, singleDie) {
     isAnimating = true;
-    rollDiceBtn.disabled = true;
+    diceArea.disabled = true;
 
     dice2El.classList.toggle('hidden', !!singleDie);
 
@@ -539,7 +539,7 @@
     if (!player || !el) return;
 
     isAnimating = true;
-    rollDiceBtn.disabled = true;
+    diceArea.disabled = true;
 
     let i = 0;
     const stepTimer = setInterval(() => {

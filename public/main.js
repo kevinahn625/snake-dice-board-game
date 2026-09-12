@@ -271,7 +271,7 @@
     const elapsedSec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
     const min = Math.floor(elapsedSec / 60);
     const sec = elapsedSec % 60;
-    gameTimerEl.textContent = `게임중 (${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')})`;
+    gameTimerEl.textContent = `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   }
 
   function startGameTimer(startedAt) {

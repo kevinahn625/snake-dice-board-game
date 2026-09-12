@@ -40,12 +40,14 @@
 <div id="gameScreen" class="screen hidden">
   <div class="top-bar">
     <div id="turnIndicator" class="turn-indicator">대기 중...</div>
-    <div id="gameTimer" class="game-timer hidden">00:00</div>
     <button id="diceArea" type="button" class="dice-area" disabled title="주사위를 터치해 굴리세요">
       <div id="dice1" class="dice">-</div>
       <div id="dice2" class="dice">-</div>
     </button>
-    <button id="muteBtn" class="mute-btn" title="소리 켜기/끄기">🔊</button>
+    <div class="side-controls">
+      <div id="gameTimer" class="game-timer hidden">00:00</div>
+      <button id="muteBtn" class="mute-btn" title="소리 켜기/끄기">🔊</button>
+    </div>
   </div>
 
   <div id="boardWrap" class="board-wrap">

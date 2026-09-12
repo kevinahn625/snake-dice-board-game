@@ -51,6 +51,25 @@
   let isAnimating = false;
 
   // -------------------------------------------------------------------
+  // 재접속용 세션 저장 (모바일 화면 잠금/새로고침으로 페이지가 다시
+  // 로드되어도 같은 자리로 돌아갈 수 있도록 roomId/pid를 남겨둔다)
+  // -------------------------------------------------------------------
+  const SESSION_KEY = 'sdbg_session';
+
+  function saveSession(data) {
+    try { localStorage.setItem(SESSION_KEY, JSON.stringify(data)); } catch (e) { /* noop */ }
+  }
+  function loadSession() {
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+  function clearSession() {
+    try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* noop */ }
+  }
+
+  // -------------------------------------------------------------------
   // 사운드 엔진 (Web Audio API로 배경음악/효과음을 직접 합성해 재생)
   // 별도 오디오 파일 없이 동작하도록 오실레이터로 소리를 만든다.
   // -------------------------------------------------------------------
@@ -195,6 +214,7 @@
   const roomCodeInput = document.getElementById('roomCodeInput');
   const joinRoomBtn = document.getElementById('joinRoomBtn');
   const modalError = document.getElementById('modalError');
+  const lastUpdatedEl = document.getElementById('lastUpdated');
 
   const lobbyScreen = document.getElementById('lobbyScreen');
   const roomCodeDisplay = document.getElementById('roomCodeDisplay');
@@ -251,8 +271,29 @@
     socket.on('joinedRoom', (state) => {
       selfId = state.selfId;
       currentRoom = state;
+      saveSession({ roomId: state.roomId, pid: state.selfId });
       renderLobby();
       switchToLobby();
+    });
+
+    socket.on('rejoined', (state) => {
+      selfId = state.selfId;
+      currentRoom = state;
+      saveSession({ roomId: state.roomId, pid: state.selfId });
+      if (state.started) {
+        switchToGame();
+        renderBoardTokens();
+        renderTurn();
+        Sound.startBgm();
+      } else {
+        renderLobby();
+        switchToLobby();
+      }
+    });
+
+    socket.on('rejoinFailed', () => {
+      clearSession();
+      nameModal.classList.remove('hidden');
     });
 
     socket.on('roomUpdate', (state) => {
@@ -284,8 +325,33 @@
       renderTurn();
     });
 
+    socket.on('playerLeft', (data) => {
+      removePlayerToken(data);
+    });
+
+    socket.on('playerConnectionLost', (data) => {
+      const el = document.getElementById('token-' + data.id);
+      if (el) el.classList.add('stale');
+
+      clearTimeout(leaveMsgTimer);
+      turnIndicator.textContent = `${data.name}님 연결이 불안정해요. 재접속을 기다리는 중...`;
+      turnIndicator.classList.remove('my-turn');
+    });
+
+    socket.on('playerReconnected', (data) => {
+      const el = document.getElementById('token-' + data.id);
+      if (el) el.classList.remove('stale');
+
+      clearTimeout(leaveMsgTimer);
+      turnIndicator.textContent = `${data.name}님이 재접속했습니다`;
+      leaveMsgTimer = setTimeout(() => {
+        if (currentRoom) renderTurn();
+      }, 1400);
+    });
+
     socket.on('gameOver', (data) => {
       Sound.stopBgm();
+      clearSession();
       showWinModal(data);
     });
   }
@@ -454,6 +520,30 @@
       const el = document.getElementById('token-' + p.id);
       if (el) positionToken(el, p.position, p.id);
     });
+  }
+
+  // 게임 도중 접속이 끊긴 플레이어의 말을 자연스럽게 사라지게 하고,
+  // 남은 말들이 같은 칸에서 다시 나란히 정렬되도록 한다.
+  let leaveMsgTimer = null;
+  function removePlayerToken(data) {
+    const el = document.getElementById('token-' + data.id);
+    if (el) {
+      el.classList.remove('stale');
+      el.classList.add('leaving');
+      setTimeout(() => {
+        el.remove();
+        if (currentRoom) refreshAllTokenPositions();
+      }, 350);
+    }
+
+    if (turnIndicator) {
+      clearTimeout(leaveMsgTimer);
+      turnIndicator.textContent = `${data.name}님이 게임을 나갔습니다`;
+      turnIndicator.classList.remove('my-turn');
+      leaveMsgTimer = setTimeout(() => {
+        if (currentRoom) renderTurn();
+      }, 1600);
+    }
   }
 
   // -------------------------------------------------------------------
@@ -629,4 +719,36 @@
       refreshAllTokenPositions();
     }
   });
+
+  // -------------------------------------------------------------------
+  // 초기 화면에 최종 업데이트 일시 표시
+  // -------------------------------------------------------------------
+  (function showLastUpdated() {
+    if (!lastUpdatedEl) return;
+    fetch('/api/last-updated')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.lastUpdated) return;
+        const d = new Date(data.lastUpdated);
+        const pad = (n) => String(n).padStart(2, '0');
+        const formatted = `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        lastUpdatedEl.textContent = `최종 업데이트 ${formatted}`;
+      })
+      .catch(() => { /* 조회 실패 시 그냥 표시하지 않음 */ });
+  })();
+
+  // -------------------------------------------------------------------
+  // 페이지가 새로 열렸을 때(모바일 화면 잠금 후 탭이 새로고침된 경우 포함)
+  // 이전 세션이 남아있으면 이름 입력 화면 대신 자동으로 재접속을 시도한다.
+  // -------------------------------------------------------------------
+  (function tryAutoRejoin() {
+    const saved = loadSession();
+    if (!saved || !saved.roomId || !saved.pid) return;
+
+    nameModal.classList.add('hidden');
+    ensureSocket();
+    socket.once('connect', () => {
+      socket.emit('rejoinRoom', { roomId: saved.roomId, pid: saved.pid });
+    });
+  })();
 })();

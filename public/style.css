@@ -190,6 +190,12 @@ body {
   margin: 14px 0 0;
 }
 
+.last-updated {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+  margin: 2px 0 0;
+}
+
 /* ---------------------------------------------------------------------- */
 /* 대기실 */
 /* ---------------------------------------------------------------------- */
@@ -453,9 +459,25 @@ body {
   max-font-size: 14px;
   border: 2px solid rgba(255, 255, 255, 0.9);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-  transition: left 0.25s linear, top 0.25s linear;
+  transition: left 0.25s linear, top 0.25s linear, opacity 0.3s ease, transform 0.3s ease;
   transform: translate(-50%, -50%);
   z-index: 5;
+}
+
+/* 게임 도중 나간 플레이어의 말이 부드럽게 사라지는 연출 */
+.token.leaving {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.3);
+}
+
+/* 연결이 끊겨 재접속을 기다리는 중인 플레이어의 말 표시 */
+.token.stale {
+  animation: staleBlink 1s ease-in-out infinite alternate;
+}
+
+@keyframes staleBlink {
+  from { opacity: 0.35; }
+  to { opacity: 0.75; }
 }
 
 /* 뱀꼬리를 만나 아래로 굴러 떨어지는 연출 */

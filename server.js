@@ -1,10 +1,12 @@
 // server.js
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const { randomUUID } = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
@@ -16,6 +18,26 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// 메인 화면에 표시할 "최종 업데이트" 시각: 소스 파일들 중 가장 최근에
+// 수정된 파일의 mtime을 사용한다(배포/코드 반영 시점을 자동으로 반영).
+const SOURCE_FILES_FOR_UPDATE_CHECK = [
+  __filename,
+  path.join(__dirname, 'public', 'index.html'),
+  path.join(__dirname, 'public', 'main.js'),
+  path.join(__dirname, 'public', 'style.css')
+];
+
+app.get('/api/last-updated', (req, res) => {
+  let latest = 0;
+  for (const file of SOURCE_FILES_FOR_UPDATE_CHECK) {
+    try {
+      const mtimeMs = fs.statSync(file).mtimeMs;
+      if (mtimeMs > latest) latest = mtimeMs;
+    } catch (e) { /* 파일이 없으면 건너뜀 */ }
+  }
+  res.json({ lastUpdated: latest ? new Date(latest).toISOString() : null });
+});
+
 // ---------------------------------------------------------------------------
 // 게임 상수
 // ---------------------------------------------------------------------------
@@ -26,6 +48,10 @@ const DICE_ANIM_MS = 700;       // 주사위 굴리는 연출 시간
 const SLIDE_MS = 400;           // 뱀/파이프 슬라이드 연출 시간
 
 const PLAYER_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f']; // 빨강, 파랑, 초록, 노랑
+
+// 모바일에서 화면 잠금/백그라운드 전환으로 소켓이 일시적으로 끊겼을 때,
+// 곧바로 플레이어를 제거하지 않고 재접속을 기다려주는 유예 시간.
+const RECONNECT_GRACE_MS = 25000;
 
 // 파이프(지름길, 위로 이동) - 시작칸 -> 도착칸
 // 실제 board.png에 그려진 파이프 그림 그대로 매핑한다.
@@ -66,9 +92,13 @@ const SNAKES = {
 // ---------------------------------------------------------------------------
 /**
  * rooms[roomId] = {
- *   id, players: [{ id, nick, name, color, position, isHost }],
+ *   id, players: [{ pid, socketId, nick, name, color, position, isHost, connected, disconnectTimer }],
  *   currentTurnIndex, started
  * }
+ *
+ * pid는 재접속 시에도 유지되는 플레이어의 고정 식별자이고, socketId는
+ * 현재 연결된 소켓의 id다(재접속하면 socketId만 새 값으로 교체된다).
+ * 클라이언트에게 노출되는 모든 "id" 필드는 pid를 의미한다.
  */
 const rooms = {};
 
@@ -88,12 +118,13 @@ function publicRoomState(room) {
   return {
     roomId: room.id,
     players: room.players.map((p) => ({
-      id: p.id,
+      id: p.pid,
       nick: p.nick,
       name: p.name,
       color: p.color,
       position: p.position,
-      isHost: p.isHost
+      isHost: p.isHost,
+      connected: p.connected
     })),
     currentTurnIndex: room.currentTurnIndex,
     started: room.started
@@ -150,6 +181,48 @@ function nextAliveIndex(room, fromIndex) {
   return fromIndex % room.players.length;
 }
 
+// 재접속 유예 시간이 끝났거나(started 상태) 대기실에서 즉시 나간 경우,
+// 실제로 플레이어를 방에서 제거하고 남은 플레이어들에게 알린다.
+function finalizeRemoval(roomId, pid) {
+  const room = rooms[roomId];
+  if (!room) return;
+
+  const leavingIndex = room.players.findIndex((p) => p.pid === pid);
+  if (leavingIndex === -1) return;
+
+  const leavingPlayer = room.players[leavingIndex];
+  const wasHost = leavingPlayer.isHost;
+  const wasStarted = room.started;
+  room.players.splice(leavingIndex, 1);
+
+  if (wasStarted) {
+    io.to(room.id).emit('playerLeft', {
+      id: leavingPlayer.pid,
+      nick: leavingPlayer.nick,
+      name: leavingPlayer.name
+    });
+  }
+
+  if (room.players.length === 0) {
+    deleteRoomIfEmpty(room);
+    return;
+  }
+
+  if (wasHost) {
+    room.players[0].isHost = true;
+  }
+
+  if (leavingIndex < room.currentTurnIndex) {
+    room.currentTurnIndex -= 1;
+  }
+  room.currentTurnIndex = nextAliveIndex(room, room.currentTurnIndex);
+
+  broadcastRoomUpdate(room);
+  if (room.started) {
+    io.to(room.id).emit('turnChanged', publicRoomState(room));
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 소켓 이벤트
 // ---------------------------------------------------------------------------
@@ -177,20 +250,25 @@ io.on('connection', (socket) => {
     };
     rooms[roomId] = room;
 
+    const pid = randomUUID();
     const player = {
-      id: socket.id,
+      pid,
+      socketId: socket.id,
       nick: trimmed.substring(0, 2),
       name: trimmed,
       color: PLAYER_COLORS[0],
       position: 0,
-      isHost: true
+      isHost: true,
+      connected: true,
+      disconnectTimer: null
     };
     room.players.push(player);
 
     socket.data.roomId = roomId;
+    socket.data.pid = pid;
     socket.join(roomId);
 
-    socket.emit('joinedRoom', { selfId: socket.id, ...publicRoomState(room) });
+    socket.emit('joinedRoom', { selfId: pid, ...publicRoomState(room) });
     broadcastRoomUpdate(room);
   });
 
@@ -223,20 +301,52 @@ io.on('connection', (socket) => {
       return;
     }
 
+    const pid = randomUUID();
     const player = {
-      id: socket.id,
+      pid,
+      socketId: socket.id,
       nick: trimmed.substring(0, 2),
       name: trimmed,
       color: PLAYER_COLORS[room.players.length % PLAYER_COLORS.length],
       position: 0,
-      isHost: false
+      isHost: false,
+      connected: true,
+      disconnectTimer: null
     };
     room.players.push(player);
 
     socket.data.roomId = room.id;
+    socket.data.pid = pid;
     socket.join(room.id);
 
-    socket.emit('joinedRoom', { selfId: socket.id, ...publicRoomState(room) });
+    socket.emit('joinedRoom', { selfId: pid, ...publicRoomState(room) });
+    broadcastRoomUpdate(room);
+  });
+
+  socket.on('rejoinRoom', ({ roomId, pid }) => {
+    const room = rooms[(roomId || '').toString().trim()];
+    const player = room && room.players.find((p) => p.pid === pid);
+
+    if (!room || !player) {
+      socket.emit('rejoinFailed');
+      return;
+    }
+
+    if (player.disconnectTimer) {
+      clearTimeout(player.disconnectTimer);
+      player.disconnectTimer = null;
+    }
+
+    player.socketId = socket.id;
+    player.connected = true;
+    socket.data.roomId = room.id;
+    socket.data.pid = pid;
+    socket.join(room.id);
+
+    socket.emit('rejoined', { selfId: pid, ...publicRoomState(room) });
+    if (room.started) {
+      io.to(room.id).emit('playerReconnected', { id: pid, name: player.name });
+    }
     broadcastRoomUpdate(room);
   });
 
@@ -244,7 +354,7 @@ io.on('connection', (socket) => {
     const room = findRoomBySocket(socket);
     if (!room || room.started) return;
 
-    const player = room.players.find((p) => p.id === socket.id);
+    const player = room.players.find((p) => p.pid === socket.data.pid);
     if (!player || !player.isHost) return;
 
     room.started = true;
@@ -257,7 +367,7 @@ io.on('connection', (socket) => {
     if (!room || !room.started) return;
 
     const currentPlayer = room.players[room.currentTurnIndex];
-    if (!currentPlayer || currentPlayer.id !== socket.id) return;
+    if (!currentPlayer || currentPlayer.pid !== socket.data.pid) return;
 
     const singleDie = currentPlayer.position >= SINGLE_DIE_THRESHOLD;
     const d1 = 1 + Math.floor(Math.random() * 6);
@@ -265,7 +375,7 @@ io.on('connection', (socket) => {
     const sum = singleDie ? d1 : d1 + d2;
 
     io.to(room.id).emit('diceResult', {
-      playerId: currentPlayer.id,
+      playerId: currentPlayer.pid,
       d1,
       d2,
       sum,
@@ -282,7 +392,7 @@ io.on('connection', (socket) => {
     setTimeout(() => {
       if (!rooms[room.id]) return; // 방이 이미 사라진 경우
       io.to(room.id).emit('movePath', {
-        playerId: currentPlayer.id,
+        playerId: currentPlayer.pid,
         path,
         slideTo,
         slideType
@@ -293,7 +403,7 @@ io.on('connection', (socket) => {
       setTimeout(() => {
         const liveRoom = rooms[room.id];
         if (!liveRoom) return;
-        const livePlayer = liveRoom.players.find((p) => p.id === currentPlayer.id);
+        const livePlayer = liveRoom.players.find((p) => p.pid === currentPlayer.pid);
         if (!livePlayer) return;
 
         livePlayer.position = slideTo || landedAt;
@@ -302,7 +412,7 @@ io.on('connection', (socket) => {
           const rankings = [...liveRoom.players]
             .sort((a, b) => b.position - a.position)
             .map((p, idx) => ({
-              id: p.id,
+              id: p.pid,
               nick: p.nick,
               name: p.name,
               position: p.position,
@@ -310,7 +420,7 @@ io.on('connection', (socket) => {
             }));
 
           io.to(liveRoom.id).emit('gameOver', {
-            winnerId: livePlayer.id,
+            winnerId: livePlayer.pid,
             winnerNick: livePlayer.nick,
             winnerName: livePlayer.name,
             rankings
@@ -322,7 +432,7 @@ io.on('connection', (socket) => {
 
         liveRoom.currentTurnIndex = nextAliveIndex(
           liveRoom,
-          liveRoom.players.findIndex((p) => p.id === livePlayer.id) + 1
+          liveRoom.players.findIndex((p) => p.pid === livePlayer.pid) + 1
         );
 
         io.to(liveRoom.id).emit('turnChanged', publicRoomState(liveRoom));
@@ -334,30 +444,27 @@ io.on('connection', (socket) => {
     const room = findRoomBySocket(socket);
     if (!room) return;
 
-    const leavingIndex = room.players.findIndex((p) => p.id === socket.id);
-    if (leavingIndex === -1) return;
+    const pid = socket.data.pid;
+    const player = room.players.find((p) => p.pid === pid);
+    // socketId가 다르면 이미 재접속으로 새 소켓이 자리를 대체한 뒤이므로
+    // 지금 끊긴 건 이전(낡은) 소켓일 뿐 - 무시한다.
+    if (!player || player.socketId !== socket.id) return;
 
-    const wasHost = room.players[leavingIndex].isHost;
-    room.players.splice(leavingIndex, 1);
-
-    if (room.players.length === 0) {
-      deleteRoomIfEmpty(room);
+    // 대기실(게임 시작 전)에서는 지금처럼 곧바로 제거한다.
+    if (!room.started) {
+      finalizeRemoval(room.id, pid);
       return;
     }
 
-    if (wasHost) {
-      room.players[0].isHost = true;
-    }
+    // 게임 진행 중에는 곧바로 제거하지 않고, 모바일 화면 잠금/네트워크
+    // 전환 등으로 인한 일시적 끊김일 수 있으므로 재접속을 기다려준다.
+    player.connected = false;
+    io.to(room.id).emit('playerConnectionLost', { id: player.pid, name: player.name });
 
-    if (leavingIndex < room.currentTurnIndex) {
-      room.currentTurnIndex -= 1;
-    }
-    room.currentTurnIndex = nextAliveIndex(room, room.currentTurnIndex);
-
-    broadcastRoomUpdate(room);
-    if (room.started) {
-      io.to(room.id).emit('turnChanged', publicRoomState(room));
-    }
+    const roomId = room.id;
+    player.disconnectTimer = setTimeout(() => {
+      finalizeRemoval(roomId, pid);
+    }, RECONNECT_GRACE_MS);
   });
 });
 

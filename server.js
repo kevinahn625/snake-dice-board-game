@@ -425,8 +425,14 @@ io.on('connection', (socket) => {
             winnerName: livePlayer.name,
             rankings
           });
-          liveRoom.started = false;
-          broadcastRoomUpdate(liveRoom);
+
+          // 게임이 끝난 방은 재시작 기능이 없으므로, 재접속 유예를 기다리던
+          // 플레이어가 있어도 즉시 정리해서 끝난 게임으로 "이어하기"가
+          // 되지 않도록 방 자체를 제거한다.
+          liveRoom.players.forEach((p) => {
+            if (p.disconnectTimer) clearTimeout(p.disconnectTimer);
+          });
+          delete rooms[liveRoom.id];
           return;
         }
 

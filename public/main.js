@@ -216,6 +216,10 @@
   const modalError = document.getElementById('modalError');
   const lastUpdatedEl = document.getElementById('lastUpdated');
 
+  const resumeModal = document.getElementById('resumeModal');
+  const resumeBtn = document.getElementById('resumeBtn');
+  const freshStartBtn = document.getElementById('freshStartBtn');
+
   const lobbyScreen = document.getElementById('lobbyScreen');
   const roomCodeDisplay = document.getElementById('roomCodeDisplay');
   const playerList = document.getElementById('playerList');
@@ -738,17 +742,43 @@
   })();
 
   // -------------------------------------------------------------------
-  // 페이지가 새로 열렸을 때(모바일 화면 잠금 후 탭이 새로고침된 경우 포함)
-  // 이전 세션이 남아있으면 이름 입력 화면 대신 자동으로 재접속을 시도한다.
+  // 페이지가 새로 열렸을 때(모바일 화면 잠금 후 탭이 새로고침된 경우,
+  // 또는 스스로 나갔다가 다시 들어온 경우 포함) 이전 세션이 남아있으면
+  // 곧바로 이어붙이지 않고, 사용자에게 "이어하기 / 새로 시작하기"를 물어본다.
   // -------------------------------------------------------------------
-  (function tryAutoRejoin() {
+  function doRejoin(saved) {
+    ensureSocket();
+    if (socket.connected) {
+      socket.emit('rejoinRoom', { roomId: saved.roomId, pid: saved.pid });
+    } else {
+      socket.once('connect', () => {
+        socket.emit('rejoinRoom', { roomId: saved.roomId, pid: saved.pid });
+      });
+    }
+  }
+
+  resumeBtn.addEventListener('click', () => {
+    const saved = loadSession();
+    if (!saved) {
+      resumeModal.classList.add('hidden');
+      nameModal.classList.remove('hidden');
+      return;
+    }
+    resumeModal.classList.add('hidden');
+    doRejoin(saved);
+  });
+
+  freshStartBtn.addEventListener('click', () => {
+    clearSession();
+    resumeModal.classList.add('hidden');
+    nameModal.classList.remove('hidden');
+  });
+
+  (function checkResumableSession() {
     const saved = loadSession();
     if (!saved || !saved.roomId || !saved.pid) return;
 
     nameModal.classList.add('hidden');
-    ensureSocket();
-    socket.once('connect', () => {
-      socket.emit('rejoinRoom', { roomId: saved.roomId, pid: saved.pid });
-    });
+    resumeModal.classList.remove('hidden');
   })();
 })();

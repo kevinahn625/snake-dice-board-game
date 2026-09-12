@@ -542,6 +542,10 @@ body {
   margin: 0 0 22px;
 }
 
+#resumeModal .btn + .btn {
+  margin-top: 10px;
+}
+
 .rank-list {
   list-style: none;
   margin: 0 0 22px;

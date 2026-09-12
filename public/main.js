@@ -228,6 +228,7 @@
 
   const gameScreen = document.getElementById('gameScreen');
   const turnIndicator = document.getElementById('turnIndicator');
+  const gameTimerEl = document.getElementById('gameTimer');
   const dice1El = document.getElementById('dice1');
   const dice2El = document.getElementById('dice2');
   const tokenLayer = document.getElementById('tokenLayer');
@@ -249,6 +250,7 @@
   }
 
   function switchToLobby() {
+    stopGameTimer();
     nameModal.classList.add('hidden');
     gameScreen.classList.add('hidden');
     lobbyScreen.classList.remove('hidden');
@@ -258,6 +260,35 @@
     lobbyScreen.classList.add('hidden');
     winModal.classList.add('hidden');
     gameScreen.classList.remove('hidden');
+  }
+
+  // -------------------------------------------------------------------
+  // 게임 경과 시간 표시
+  // -------------------------------------------------------------------
+  let gameTimerInterval = null;
+
+  function formatElapsed(ms) {
+    const totalSec = Math.max(0, Math.floor(ms / 1000));
+    const min = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const sec = String(totalSec % 60).padStart(2, '0');
+    return `게임 중 ${min}:${sec}`;
+  }
+
+  function startGameTimer(startedAt) {
+    stopGameTimer();
+    const start = startedAt || Date.now();
+    const tick = () => {
+      gameTimerEl.textContent = formatElapsed(Date.now() - start);
+    };
+    tick();
+    gameTimerInterval = setInterval(tick, 1000);
+  }
+
+  function stopGameTimer() {
+    if (gameTimerInterval) {
+      clearInterval(gameTimerInterval);
+      gameTimerInterval = null;
+    }
   }
 
   // -------------------------------------------------------------------
@@ -288,6 +319,7 @@
         switchToGame();
         renderBoardTokens();
         renderTurn();
+        startGameTimer(state.startedAt);
         Sound.startBgm();
       } else {
         renderLobby();
@@ -313,6 +345,7 @@
       switchToGame();
       renderBoardTokens();
       renderTurn();
+      startGameTimer(state.startedAt);
       Sound.startBgm();
     });
 
@@ -688,6 +721,7 @@
   // 승리 모달
   // -------------------------------------------------------------------
   function showWinModal(data) {
+    stopGameTimer();
     const isMe = data.winnerId === selfId;
     winTitle.textContent = isMe ? '🎉 승리했습니다! 🎉' : '🎉 게임 종료 🎉';
     winMessage.textContent = '결승선에 도착했습니다! 최종 순위는 다음과 같습니다.';

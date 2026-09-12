@@ -228,6 +228,7 @@
 
   const gameScreen = document.getElementById('gameScreen');
   const turnIndicator = document.getElementById('turnIndicator');
+  const gameTimerEl = document.getElementById('gameTimer');
   const dice1El = document.getElementById('dice1');
   const dice2El = document.getElementById('dice2');
   const tokenLayer = document.getElementById('tokenLayer');
@@ -252,12 +253,41 @@
     nameModal.classList.add('hidden');
     gameScreen.classList.add('hidden');
     lobbyScreen.classList.remove('hidden');
+    stopGameTimer();
   }
 
   function switchToGame() {
     lobbyScreen.classList.add('hidden');
     winModal.classList.add('hidden');
     gameScreen.classList.remove('hidden');
+  }
+
+  // -------------------------------------------------------------------
+  // 게임 진행 시간(분:초) 표시
+  // -------------------------------------------------------------------
+  let gameTimerInterval = null;
+
+  function updateGameTimerDisplay(startedAt) {
+    const elapsedSec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+    const min = Math.floor(elapsedSec / 60);
+    const sec = elapsedSec % 60;
+    gameTimerEl.textContent = `게임중 (${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')})`;
+  }
+
+  function startGameTimer(startedAt) {
+    stopGameTimer();
+    if (!startedAt) return;
+    gameTimerEl.classList.remove('hidden');
+    updateGameTimerDisplay(startedAt);
+    gameTimerInterval = setInterval(() => updateGameTimerDisplay(startedAt), 1000);
+  }
+
+  function stopGameTimer() {
+    if (gameTimerInterval) {
+      clearInterval(gameTimerInterval);
+      gameTimerInterval = null;
+    }
+    gameTimerEl.classList.add('hidden');
   }
 
   // -------------------------------------------------------------------
@@ -288,6 +318,7 @@
         switchToGame();
         renderBoardTokens();
         renderTurn();
+        startGameTimer(state.startedAt);
         Sound.startBgm();
       } else {
         renderLobby();
@@ -313,6 +344,7 @@
       switchToGame();
       renderBoardTokens();
       renderTurn();
+      startGameTimer(state.startedAt);
       Sound.startBgm();
     });
 
@@ -355,6 +387,7 @@
 
     socket.on('gameOver', (data) => {
       Sound.stopBgm();
+      stopGameTimer();
       clearSession();
       showWinModal(data);
     });

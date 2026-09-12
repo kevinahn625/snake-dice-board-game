@@ -127,7 +127,8 @@ function publicRoomState(room) {
       connected: p.connected
     })),
     currentTurnIndex: room.currentTurnIndex,
-    started: room.started
+    started: room.started,
+    startedAt: room.startedAt || null
   };
 }
 
@@ -358,6 +359,7 @@ io.on('connection', (socket) => {
     if (!player || !player.isHost) return;
 
     room.started = true;
+    room.startedAt = Date.now();
     room.currentTurnIndex = 0;
     io.to(room.id).emit('gameStarted', publicRoomState(room));
   });

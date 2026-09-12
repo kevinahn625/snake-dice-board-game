@@ -303,6 +303,17 @@ body {
   background: #4f8cff;
 }
 
+.game-timer {
+  font-size: 13px;
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+  color: #a8b3cf;
+  background: #232d42;
+  padding: 8px 10px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
 .dice-area {
   display: flex;
   gap: 8px;

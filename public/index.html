@@ -17,6 +17,14 @@
     <input type="text" id="roomCodeInput" maxlength="4" placeholder="방코드 4자리 입력" autocomplete="off" inputmode="numeric"
            class="art-field roomcode-field">
     <button id="joinRoomBtn" class="art-field join-field">참가하기</button>
+
+    <div class="sudden-death-option">
+      <label class="sudden-death-toggle">
+        <input type="checkbox" id="suddenDeathCheckbox" checked>
+        <span>서든 데스: 7-Roll Limit 방식</span>
+      </label>
+      <p class="sudden-death-desc">게임 시간 5분이 지나도 진행 중이면, 유저별 주사위 7회 후 자동 종료됩니다.</p>
+    </div>
   </div>
   <p id="modalError" class="error-text"></p>
   <p id="lastUpdated" class="last-updated"></p>
@@ -49,6 +57,8 @@
       <button id="muteBtn" class="mute-btn" title="소리 켜기/끄기">🔊</button>
     </div>
   </div>
+
+  <div id="suddenDeathBanner" class="sudden-death-banner hidden"></div>
 
   <div id="boardWrap" class="board-wrap">
     <div id="board" class="board">

@@ -53,6 +53,11 @@ const PLAYER_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f']; // 빨강, �
 // 곧바로 플레이어를 제거하지 않고 재접속을 기다려주는 유예 시간.
 const RECONNECT_GRACE_MS = 25000;
 
+// 서든 데스: 경기 시작 후 이 시간이 지나면, 현재 라운드의 마지막 순번
+// 플레이어 턴이 끝나는 즉시 서든 데스(7-Roll Limit)로 전환된다.
+const SUDDEN_DEATH_TIME_MS = 5 * 60 * 1000;
+const SUDDEN_DEATH_ROLLS = 7;
+
 // 파이프(지름길, 위로 이동) - 시작칸 -> 도착칸
 // 실제 board.png에 그려진 파이프 그림 그대로 매핑한다.
 const LADDERS = {
@@ -124,11 +129,14 @@ function publicRoomState(room) {
       color: p.color,
       position: p.position,
       isHost: p.isHost,
-      connected: p.connected
+      connected: p.connected,
+      rollsLeft: room.suddenDeathActive ? (p.rollsLeft != null ? p.rollsLeft : SUDDEN_DEATH_ROLLS) : null
     })),
     currentTurnIndex: room.currentTurnIndex,
     started: room.started,
-    startedAt: room.startedAt || null
+    startedAt: room.startedAt || null,
+    suddenDeathEnabled: !!room.suddenDeathEnabled,
+    suddenDeathActive: !!room.suddenDeathActive
   };
 }
 
@@ -182,6 +190,60 @@ function nextAliveIndex(room, fromIndex) {
   return fromIndex % room.players.length;
 }
 
+// 서든 데스 중에는 남은 주사위 횟수(rollsLeft)가 있는 플레이어에게만
+// 차례가 돌아가야 한다. 모두 소진했으면 -1을 반환한다.
+function nextSuddenDeathIndex(room, fromIndex) {
+  const n = room.players.length;
+  if (n === 0) return -1;
+  for (let i = 0; i < n; i++) {
+    const idx = (fromIndex + i) % n;
+    if ((room.players[idx].rollsLeft || 0) > 0) return idx;
+  }
+  return -1;
+}
+
+// 서든 데스 발동: 방장 순서부터 시작하고, 전원에게 정확히 7회의 기회를 준다.
+function triggerSuddenDeath(room) {
+  room.suddenDeathActive = true;
+  room.players.forEach((p) => { p.rollsLeft = SUDDEN_DEATH_ROLLS; });
+
+  const hostIndex = room.players.findIndex((p) => p.isHost);
+  room.currentTurnIndex = hostIndex >= 0 ? hostIndex : 0;
+
+  io.to(room.id).emit('suddenDeathStart', {
+    message: '경기 시간 5분 경과!\n서든 데스 모드로 전환 (유저별 7회)',
+    ...publicRoomState(room)
+  });
+}
+
+// 서든 데스 종료: 목표점과 가장 가까운(=칸 번호가 가장 큰) 순서로 순위를 매긴다.
+function endSuddenDeath(room) {
+  const rankings = [...room.players]
+    .sort((a, b) => b.position - a.position)
+    .map((p, idx) => ({
+      id: p.pid,
+      nick: p.nick,
+      name: p.name,
+      position: p.position,
+      rank: idx + 1
+    }));
+
+  const winner = rankings[0];
+
+  io.to(room.id).emit('gameOver', {
+    winnerId: winner.id,
+    winnerNick: winner.nick,
+    winnerName: winner.name,
+    rankings,
+    suddenDeath: true
+  });
+
+  room.players.forEach((p) => {
+    if (p.disconnectTimer) clearTimeout(p.disconnectTimer);
+  });
+  delete rooms[room.id];
+}
+
 // 재접속 유예 시간이 끝났거나(started 상태) 대기실에서 즉시 나간 경우,
 // 실제로 플레이어를 방에서 제거하고 남은 플레이어들에게 알린다.
 function finalizeRemoval(roomId, pid) {
@@ -216,7 +278,17 @@ function finalizeRemoval(roomId, pid) {
   if (leavingIndex < room.currentTurnIndex) {
     room.currentTurnIndex -= 1;
   }
-  room.currentTurnIndex = nextAliveIndex(room, room.currentTurnIndex);
+
+  if (room.suddenDeathActive) {
+    const nextIdx = nextSuddenDeathIndex(room, room.currentTurnIndex);
+    if (nextIdx === -1) {
+      endSuddenDeath(room);
+      return;
+    }
+    room.currentTurnIndex = nextIdx;
+  } else {
+    room.currentTurnIndex = nextAliveIndex(room, room.currentTurnIndex);
+  }
 
   broadcastRoomUpdate(room);
   if (room.started) {
@@ -228,7 +300,7 @@ function finalizeRemoval(roomId, pid) {
 // 소켓 이벤트
 // ---------------------------------------------------------------------------
 io.on('connection', (socket) => {
-  socket.on('createRoom', ({ name }) => {
+  socket.on('createRoom', ({ name, suddenDeathEnabled }) => {
     if (findRoomBySocket(socket)) return;
 
     const trimmed = (name || '').toString().trim();
@@ -247,7 +319,10 @@ io.on('connection', (socket) => {
       id: roomId,
       players: [],
       currentTurnIndex: 0,
-      started: false
+      started: false,
+      // 옵션 체크 해제(false)로 명시된 경우만 끄고, 그 외에는 기본값 true.
+      suddenDeathEnabled: suddenDeathEnabled !== false,
+      suddenDeathActive: false
     };
     rooms[roomId] = room;
 
@@ -370,6 +445,12 @@ io.on('connection', (socket) => {
 
     const currentPlayer = room.players[room.currentTurnIndex];
     if (!currentPlayer || currentPlayer.pid !== socket.data.pid) return;
+    if (room.suddenDeathActive && (currentPlayer.rollsLeft || 0) <= 0) return;
+    // 이전 굴림의 이동/판정 연출이 끝나기 전에 같은 턴에서 다시 굴리는 것을
+    // 막는다(클라이언트는 애니메이션이 끝나면 곧바로 버튼을 다시 활성화하지만,
+    // 서버의 턴 전환/서든 데스 횟수 차감은 그보다 늦게 확정되기 때문).
+    if (room.rollInProgress) return;
+    room.rollInProgress = true;
 
     const singleDie = currentPlayer.position >= SINGLE_DIE_THRESHOLD;
     const d1 = 1 + Math.floor(Math.random() * 6);
@@ -405,6 +486,8 @@ io.on('connection', (socket) => {
       setTimeout(() => {
         const liveRoom = rooms[room.id];
         if (!liveRoom) return;
+        liveRoom.rollInProgress = false;
+
         const livePlayer = liveRoom.players.find((p) => p.pid === currentPlayer.pid);
         if (!livePlayer) return;
 
@@ -438,11 +521,32 @@ io.on('connection', (socket) => {
           return;
         }
 
-        liveRoom.currentTurnIndex = nextAliveIndex(
-          liveRoom,
-          liveRoom.players.findIndex((p) => p.pid === livePlayer.pid) + 1
-        );
+        const finishingIndex = liveRoom.players.findIndex((p) => p.pid === livePlayer.pid);
 
+        if (liveRoom.suddenDeathActive) {
+          livePlayer.rollsLeft = Math.max(0, (livePlayer.rollsLeft || 0) - 1);
+
+          const nextIdx = nextSuddenDeathIndex(liveRoom, finishingIndex + 1);
+          if (nextIdx === -1) {
+            endSuddenDeath(liveRoom);
+            return;
+          }
+          liveRoom.currentTurnIndex = nextIdx;
+          io.to(liveRoom.id).emit('turnChanged', publicRoomState(liveRoom));
+          return;
+        }
+
+        // 아직 서든 데스가 아니면: 5분이 지났고, 이번이 이번 라운드의 마지막
+        // 순번(플레이어 배열의 마지막) 턴이었는지 확인해 발동 여부를 정한다.
+        const isLastInRound = finishingIndex === liveRoom.players.length - 1;
+        const elapsed = Date.now() - (liveRoom.startedAt || Date.now());
+
+        if (liveRoom.suddenDeathEnabled && elapsed >= SUDDEN_DEATH_TIME_MS && isLastInRound) {
+          triggerSuddenDeath(liveRoom);
+          return;
+        }
+
+        liveRoom.currentTurnIndex = nextAliveIndex(liveRoom, finishingIndex + 1);
         io.to(liveRoom.id).emit('turnChanged', publicRoomState(liveRoom));
       }, totalMoveMs + 200);
     }, DICE_ANIM_MS);

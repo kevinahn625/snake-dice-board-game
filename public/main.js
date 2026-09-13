@@ -215,6 +215,7 @@
   const joinRoomBtn = document.getElementById('joinRoomBtn');
   const modalError = document.getElementById('modalError');
   const lastUpdatedEl = document.getElementById('lastUpdated');
+  const suddenDeathCheckbox = document.getElementById('suddenDeathCheckbox');
 
   const resumeModal = document.getElementById('resumeModal');
   const resumeBtn = document.getElementById('resumeBtn');
@@ -241,6 +242,7 @@
   const reloadBtn = document.getElementById('reloadBtn');
 
   const muteBtn = document.getElementById('muteBtn');
+  const suddenDeathBanner = document.getElementById('suddenDeathBanner');
 
   // -------------------------------------------------------------------
   // 화면 전환 헬퍼
@@ -288,6 +290,19 @@
       gameTimerInterval = null;
     }
     gameTimerEl.classList.add('hidden');
+  }
+
+  // -------------------------------------------------------------------
+  // 서든 데스 발동 안내 배너
+  // -------------------------------------------------------------------
+  let suddenDeathBannerTimer = null;
+  function showSuddenDeathBanner(message) {
+    clearTimeout(suddenDeathBannerTimer);
+    suddenDeathBanner.textContent = message;
+    suddenDeathBanner.classList.remove('hidden');
+    suddenDeathBannerTimer = setTimeout(() => {
+      suddenDeathBanner.classList.add('hidden');
+    }, 2500);
   }
 
   // -------------------------------------------------------------------
@@ -358,6 +373,7 @@
 
     socket.on('turnChanged', (state) => {
       currentRoom = state;
+      updateRollsBadges();
       renderTurn();
     });
 
@@ -391,6 +407,13 @@
       clearSession();
       showWinModal(data);
     });
+
+    socket.on('suddenDeathStart', (state) => {
+      currentRoom = state;
+      showSuddenDeathBanner(state.message);
+      renderBoardTokens();
+      renderTurn();
+    });
   }
 
   // -------------------------------------------------------------------
@@ -405,7 +428,7 @@
     }
     showError('');
     ensureSocket();
-    socket.emit('createRoom', { name });
+    socket.emit('createRoom', { name, suddenDeathEnabled: suddenDeathCheckbox.checked });
   });
 
   joinRoomBtn.addEventListener('click', () => {
@@ -506,6 +529,27 @@
       positionToken(el, p.position, p.id);
       tokenLayer.appendChild(el);
     });
+    updateRollsBadges();
+  }
+
+  // 서든 데스 중 개인별 남은 주사위 횟수를 말 옆에 실시간으로 표시한다.
+  function updateRollsBadges() {
+    if (!currentRoom) return;
+    currentRoom.players.forEach((p) => {
+      const tokenEl = document.getElementById('token-' + p.id);
+      if (!tokenEl) return;
+      let badge = tokenEl.querySelector('.rolls-badge');
+      if (!currentRoom.suddenDeathActive || p.rollsLeft == null) {
+        if (badge) badge.remove();
+        return;
+      }
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'rolls-badge';
+        tokenEl.appendChild(badge);
+      }
+      badge.textContent = p.rollsLeft;
+    });
   }
 
   // 같은 칸에 여러 말이 겹칠 때 살짝 오프셋을 주어 나란히 보이게 한다.
@@ -594,11 +638,18 @@
 
     dice2El.classList.toggle('hidden', current.position >= SINGLE_DIE_THRESHOLD);
 
+    const inSuddenDeath = currentRoom.suddenDeathActive && current.rollsLeft != null;
+
     if (isMyTurn) {
-      turnIndicator.textContent = '내 차례! 주사위를 터치하세요 👉';
+      // 서든 데스 중에는 문구를 짧게 줄여 2줄을 넘지 않게 한다.
+      turnIndicator.textContent = inSuddenDeath
+        ? `내 차례 👉 (남은 ${current.rollsLeft}회)`
+        : '내 차례! 주사위를 터치하세요 👉';
       turnIndicator.classList.add('my-turn');
     } else {
-      turnIndicator.textContent = `${current.name}님 차례예요`;
+      turnIndicator.textContent = inSuddenDeath
+        ? `${current.name}님 차례 (남은 ${current.rollsLeft}회)`
+        : `${current.name}님 차례예요`;
       turnIndicator.classList.remove('my-turn');
     }
 
@@ -723,7 +774,9 @@
   function showWinModal(data) {
     const isMe = data.winnerId === selfId;
     winTitle.textContent = isMe ? '🎉 승리했습니다! 🎉' : '🎉 게임 종료 🎉';
-    winMessage.textContent = '결승선에 도착했습니다! 최종 순위는 다음과 같습니다.';
+    winMessage.textContent = data.suddenDeath
+      ? '서든 데스 종료! 목표점에 가장 가까운 순서로 순위를 매겼습니다.'
+      : '결승선에 도착했습니다! 최종 순위는 다음과 같습니다.';
 
     rankList.innerHTML = '';
     (data.rankings || []).forEach((r) => {
